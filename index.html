@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Primus zkTLS // Bank Firewall & Schema Drift Lab</title>
+  <style>
+    :root {
+      --bg: #07090e;
+      --panel: #0d111a;
+      --panel-2: #121826;
+      --border: #1e293b;
+      --border-hi: #334155;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.16);
+      --green: #10b981;
+      --green-bg: rgba(16, 185, 129, 0.12);
+      --red: #f43f5e;
+      --red-bg: rgba(244, 63, 94, 0.12);
+      --amber: #f59e0b;
+      --amber-bg: rgba(245, 158, 11, 0.12);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: radial-gradient(circle at 15% 0%, #0f172a 0%, var(--bg) 55%);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.5;
+      min-height: 100vh;
+      padding: 24px 16px 64px;
+    }
+
+    .container {
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding-bottom: 20px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-badge {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #0284c7, #38bdf8);
+      display: grid;
+      place-items: center;
+      font-family: var(--mono);
+      font-weight: 800;
+      font-size: 18px;
+      color: #041019;
+      box-shadow: 0 0 24px var(--accent-glow);
+    }
+
+    .brand h1 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .brand p {
+      font-size: 12px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    .status-pill {
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--panel-2);
+      border: 1px solid var(--border-hi);
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1.15fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .step-tag {
+      font-family: var(--mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      background: var(--accent-glow);
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+
+    .card h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-family: var(--mono);
+    }
+
+    select, input[type="text"] {
+      width: 100%;
+      background: var(--panel-2);
+      border: 1px solid var(--border-hi);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-family: var(--mono);
+      font-size: 13px;
+      outline: none;
+    }
+
+    select:focus, input[type="text"]:focus {
+      border-color: var(--accent);
+    }
+
+    .mode-switch {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .mode-btn {
+      background: var(--panel-2);
+      border: 1px solid var(--border-hi);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: left;
+      cursor: pointer;
+      color: var(--text);
+      transition: all 0.15s ease;
+    }
+
+    .mode-btn.active {
+      border-color: var(--accent);
+      background: rgba(56, 189, 248, 0.08);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+
+    .mode-title {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .mode-sub {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      padding: 12px;
+      border-radius: 10px;
+      gap: 12px;
+    }
+
+    .toggle-row span {
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .toggle-row small {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    button.btn {
+      border: none;
+      border-radius: 9px;
+      padding: 11px 16px;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.1s ease, opacity 0.15s ease;
+    }
+
+    button.btn:active { transform: scale(0.99); }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #03111a;
+      flex: 1;
+    }
+
+    .btn-warn {
+      background: var(--amber-bg);
+      color: var(--amber);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+    }
+
+    .btn-success {
+      background: var(--green-bg);
+      color: var(--green);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+
+    .btn-danger {
+      background: var(--red-bg);
+      color: var(--red);
+      border: 1px solid rgba(244, 63, 94, 0.35);
+    }
+
+    .btn-ghost {
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border-hi);
+    }
+
+    .json-box {
+      background: #06080d;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      font-family: var(--mono);
+      font-size: 12px;
+      overflow-x: auto;
+      line-height: 1.6;
+    }
+
+    .blur-secret {
+      background: #1e293b;
+      color: transparent;
+      text-shadow: 0 0 7px rgba(226, 232, 240, 0.75);
+      border-radius: 4px;
+      padding: 0 6px;
+      user-select: none;
+    }
+
+    .badge {
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 5px;
+      font-weight: 600;
+    }
+
+    .badge-ok { background: var(--green-bg); color: var(--green); }
+    .badge-err { background: var(--red-bg); color: var(--red); }
+    .badge-warn { background: var(--amber-bg); color: var(--amber); }
+
+    .terminal {
+      background: #05070b;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      font-family: var(--mono);
+      font-size: 12px;
+      min-height: 190px;
+      max-height: 270px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .log-line { display: flex; gap: 8px; align-items: flex-start; }
+    .log-time { color: #64748b; flex-shrink: 0; }
+    .log-ok { color: var(--green); }
+    .log-err { color: var(--red); }
+    .log-warn { color: var(--amber); }
+    .log-info { color: var(--accent); }
+
+    .receipt {
+      background: linear-gradient(180deg, #0f172a 0%, #090d16 100%);
+      border: 1px solid var(--border-hi);
+      border-radius: 12px;
+      padding: 16px;
+      font-family: var(--mono);
+      font-size: 12px;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .receipt.visible { display: flex; }
+
+    .kv {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px dashed var(--border);
+      padding-bottom: 6px;
+    }
+
+    .kv span:first-child { color: var(--muted); }
+    .kv span:last-child { color: var(--text); word-break: break-all; text-align: right; }
+
+    .full-span {
+      grid-column: 1 / -1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="logo-badge">P</div>
+        <div>
+          <h1>Primus zkTLS // Bank Firewall &amp; Schema Drift Lab</h1>
+          <p>MPC-TLS vs Proxy-TLS • JA3/JA4 WAF Stress Test • Decentralized Template Sync</p>
+        </div>
+      </div>
+      <div class="status-pill">
+        <span class="dot"></span>
+        <span>ATTESTOR QUORUM: 3/3 TEE ACTIVE</span>
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- PANEL 1: NETWORK & FIREWALL CONFIG -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <span class="step-tag">01 // Transport &amp; WAF Layer</span>
+            <h2>Connection Route &amp; Bank Firewall</h2>
+          </div>
+        </div>
+
+        <div>
+          <label>TARGET WEB2 INSTITUTION ENDPOINT</label>
+          <select id="endpointSelect" onchange="renderPayload()">
+            <option value="bank">Chase Commercial API — /v2/accounts/checking/solvency</option>
+            <option value="exchange">Binance Institutional — /sapi/v1/capital/spot/summary</option>
+            <option value="neobank">Revolut Business — /api/1.0/vaults/eur-reserve</option>
+          </select>
+        </div>
+
+        <div>
+          <label>ZKTLS ARCHITECTURE MODE</label>
+          <div class="mode-switch">
+            <button type="button" class="mode-btn active" id="btnMpc" onclick="setMode('MPC-TLS')">
+              <div class="mode-title">
+                <span>MPC-TLS</span>
+                <span class="badge badge-ok">RESIDENTIAL</span>
+              </div>
+              <div class="mode-sub">Split handshake in user browser. Uses home ISP IP &amp; native Chrome JA4.</div>
+            </button>
+            <button type="button" class="mode-btn" id="btnProxy" onclick="setMode('Proxy-TLS')">
+              <div class="mode-title">
+                <span>Proxy-TLS</span>
+                <span class="badge badge-warn">DATACENTER</span>
+              </div>
+              <div class="mode-sub">Routes via Attestor AWS ASN IP. High speed, exposed to WAF IP bans.</div>
+            </button>
+          </div>
+        </div>
+
+        <div class="toggle-row">
+          <div>
+            <span>Strict Bank WAF &amp; JA3/JA4 Fingerprinting</span>
+            <small>Blocks datacenter ASNs &amp; non-browser TLS ClientHello signatures</small>
+          </div>
+          <input type="checkbox" id="wafToggle" checked />
+        </div>
+
+        <div>
+          <label>BOUND ON-CHAIN WALLET ADDRESS (ANTI-REPLAY)</label>
+          <div class="btn-row">
+            <input type="text" id="walletInput" value="0x71C9482a9F3bE4109cD82B411f90eA29C318b04F" />
+            <button type="button" class="btn btn-ghost" onclick="randomizeWallet()">New 0x</button>
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-primary" onclick="runZkTlsPipeline()">
+          ▶ Execute zkTLS Verification Pipeline
+        </button>
+      </div>
+
+      <!-- PANEL 2: SCHEMA DRIFT CHAOS -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <span class="step-tag">02 // Schema Drift Simulator</span>
+            <h2>Web2 JSON Payload vs. Data Template</h2>
+          </div>
+          <span class="badge badge-ok" id="templateBadge">TEMPLATE v2.4.1 SYNCED</span>
+        </div>
+
+        <p style="font-size: 13px; color: var(--muted);">
+          Attestor nodes remain cryptographically blind to blurred personal fields while verifying the predicate <code style="color:var(--accent)">balance &gt;= 50,000</code>. Break the bank JSON schema below to test template resilience:
+        </p>
+
+        <div class="json-box" id="jsonPreview"></div>
+
+        <div class="btn-row">
+          <button type="button" class="btn btn-warn" onclick="mutateBankSchema()">
+            ⚡ Simulate Bank API Update (Break Schema)
+          </button>
+          <button type="button" class="btn btn-success" onclick="syncDecentralizedTemplate()">
+            ↻ Sync Decentralized Template
+          </button>
+        </div>
+      </div>
+
+      <!-- PANEL 3: LIVE EXECUTION LOG & PROOF RECEIPT -->
+      <div class="card full-span">
+        <div class="card-header">
+          <div>
+            <span class="step-tag">03 // Cryptographic Pipeline &amp; On-Chain Guard</span>
+            <h2>Live Attestor Execution Trace &amp; Verifiable Receipt</h2>
+          </div>
+          <div class="btn-row">
+            <button type="button" class="btn btn-danger" id="replayBtn" style="display:none;" onclick="simulateReplayAttack()">
+              ⚠ Test Sybil / Replay Attack
+            </button>
+            <button type="button" class="btn btn-ghost" id="copyReceiptBtn" style="display:none;" onclick="copyReceiptForX()">
+              Copy Proof Receipt for X
+            </button>
+          </div>
+        </div>
+
+        <div class="terminal" id="terminal">
+          <div class="log-line">
+            <span class="log-time">[READY]</span>
+            <span class="log-info">Configure MPC-TLS or Proxy-TLS above and click "Execute zkTLS Verification Pipeline".</span>
+          </div>
+        </div>
+
+        <div class="receipt" id="receiptBox">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <strong style="color:var(--green);">✓ ON-CHAIN ZKTLS PROOF VERIFIED</strong>
+            <span class="badge badge-ok" id="receiptModeTag">MPC-TLS</span>
+          </div>
+          <div class="kv"><span>Proven Statement</span><span id="rStatement">-</span></div>
+          <div class="kv"><span>Template Version</span><span id="rTemplate">-</span></div>
+          <div class="kv"><span>Proof Commitment (SHA-256)</span><span id="rProofHash">-</span></div>
+          <div class="kv"><span>Wallet Binding Hash</span><span id="rWalletBind">-</span></div>
+          <div class="kv"><span>Unique Nullifier (Anti-Sybil)</span><span id="rNullifier">-</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentMode = "MPC-TLS";
+    let schemaMutated = false;
+    let templateVersion = "v2.4.1";
+    let lastReceiptText = "";
+    const consumedNullifiers = new Set();
+
+    const payloads = {
+      bank: {
+        normalKey: "available_balance_usd",
+        mutatedKey: "ledger_avail_usd_v3",
+        user: "Alex Mercer",
+        account: "US89-CHAS-0049-8821",
+        balance: "84,250.00",
+        statement: "Chase Checking Balance >= $50,000 USD"
+      },
+      exchange: {
+        normalKey: "spot_equity_usdt",
+        mutatedKey: "unified_margin_equity_v2",
+        user: "uid_94827104",
+        account: "VIP-3 Institutional",
+        balance: "142,900.50",
+        statement: "Binance Spot Solvency >= $50,000 USDT"
+      },
+      neobank: {
+        normalKey: "vault_reserve_eur",
+        mutatedKey: "treasury_pocket_bal_v4",
+        user: "Elena Rostova",
+        account: "LT60-3250-0918-4410",
+        balance: "67,400.00",
+        statement: "Revolut EUR Reserve >= €50,000 EUR"
+      }
+    };
+
+    function setMode(mode) {
+      currentMode = mode;
+      document.getElementById("btnMpc").classList.toggle("active", mode === "MPC-TLS");
+      document.getElementById("btnProxy").classList.toggle("active", mode === "Proxy-TLS");
+      log(`Switched transport protocol to ${mode}.`, "info");
+    }
+
+    function randomizeWallet() {
+      const hex = "0123456789abcdef";
+      let addr = "0x";
+      for (let i = 0; i < 40; i++) addr += hex[Math.floor(Math.random() * 16)];
+      document.getElementById("walletInput").value = addr;
+      log(`Updated bound destination wallet to ${addr.slice(0, 10)}...${addr.slice(-6)}`, "info");
+    }
+
+    function renderPayload() {
+      const ep = document.getElementById("endpointSelect").value;
+      const data = payloads[ep];
+      const activeKey = schemaMutated ? data.mutatedKey : data.normalKey;
+      const expectedKey = templateVersion === "v2.4.1" ? data.normalKey : data.mutatedKey;
+      const matched = activeKey === expectedKey;
+
+      const badge = document.getElementById("templateBadge");
+      if (matched) {
+        badge.className = "badge badge-ok";
+        badge.textContent = `TEMPLATE ${templateVersion} MATCHED`;
+      } else {
+        badge.className = "badge badge-err";
+        badge.textContent = `SCHEMA DRIFT: EXPECTED "${expectedKey}"`;
+      }
+
+      document.getElementById("jsonPreview").innerHTML = `{
+  "institution_status": "VERIFIED_200_OK",
+  "account_holder": "<span class="blur-secret">${data.user}</span>" <span class="badge badge-warn">BLIND TO ATTESTOR</span>,
+  "iban_or_uid": "<span class="blur-secret">${data.account}</span>" <span class="badge badge-warn">REDACTED</span>,
+  "<strong style="color:${matched ? '#10b981' : '#f43f5e'}">${activeKey}</strong>": "<span class="blur-secret">${data.balance}</span>" <span class="badge ${matched ? 'badge-ok' : 'badge-err'}">${matched ? 'ZK PREDICATE >= 50k' : 'PATH NOT FOUND'}</span>
+}`;
+    }
+
+    function mutateBankSchema() {
+      schemaMutated = true;
+      renderPayload();
+      log("Bank backend pushed silent API schema update! Payload field path mutated.", "warn");
+    }
+
+    function syncDecentralizedTemplate() {
+      if (!schemaMutated && templateVersion === "v2.4.1") {
+        log("Template is already synced with current Web2 endpoint schema.", "info");
+        return;
+      }
+      templateVersion = schemaMutated ? "v2.4.2-hotfix" : "v2.4.1";
+      renderPayload();
+      log(`Decentralized Attestor registry synced ${templateVersion} via community quorum.`, "ok");
+    }
+
+    function log(msg, type = "info") {
+      const term = document.getElementById("terminal");
+      const now = new Date().toTimeString().split(" ")[0];
+      const line = document.createElement("div");
+      line.className = "log-line";
+      line.innerHTML = `<span class="log-time">[${now}]</span><span class="log-${type}">${msg}</span>`;
+      term.appendChild(line);
+      term.scrollTop = term.scrollHeight;
+    }
+
+    async function sha256(message) {
+      const msgBuffer = new TextEncoder().encode(message);
+      const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return "0x" + hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    async function runZkTlsPipeline() {
+      const ep = document.getElementById("endpointSelect").value;
+      const data = payloads[ep];
+      const wafOn = document.getElementById("wafToggle").checked;
+      const wallet = document.getElementById("walletInput").value.trim();
+
+      document.getElementById("receiptBox").classList.remove("visible");
+      document.getElementById("replayBtn").style.display = "none";
+      document.getElementById("copyReceiptBtn").style.display = "none";
+
+      if (!/^0x[a-fA-F0-9]{40}$/.test(wallet)) {
+        log("Invalid EVM wallet address. Provide a valid 42-character 0x address.", "err");
+        return;
+      }
+
+      log(`Initializing ${currentMode} session for ${ep.toUpperCase()} endpoint...`, "info");
+
+      // Step 1: WAF & TLS Fingerprinting Check
+      if (currentMode === "Proxy-TLS" && wafOn) {
+        log("WAF ALERT: Datacenter ASN (AWS eu-central-1) & non-browser JA4 signature detected.", "err");
+        log("HTTP 403 FORBIDDEN — Bank firewall dropped Proxy-TLS connection. Switch to MPC-TLS.", "err");
+        return;
+      }
+
+      if (currentMode === "MPC-TLS") {
+        log("Split-key 2PC TLS handshake completed from user residential ISP IP (JA4: Chrome_131).", "ok");
+      } else {
+        log("Proxy-TLS tunnel established (Strict Bank WAF disabled).", "warn");
+      }
+
+      // Step 2: Schema & Data Template Verification
+      const activeKey = schemaMutated ? data.mutatedKey : data.normalKey;
+      const expectedKey = templateVersion === "v2.4.1" ? data.normalKey : data.mutatedKey;
+
+      if (activeKey !== expectedKey) {
+        log(`TEMPLATE ERROR: Expected JSON key "${expectedKey}" but server returned "${activeKey}".`, "err");
+        log("ZK circuit aborted due to schema drift. Click 'Sync Decentralized Template' to recover.", "err");
+        return;
+      }
+
+      log(`Data Template ${templateVersion} matched "${activeKey}". Sensitive PII masked from Attestors.`, "ok");
+
+      // Step 3: ZK Proof & Commitments
+      const proofHash = await sha256(`${ep}:${currentMode}:${templateVersion}:${Date.now()}`);
+      const walletBind = await sha256(`BIND:${wallet}:${proofHash}`);
+      const nullifier = await sha256(`NULLIFIER:${ep}:${data.account}`);
+
+      consumedNullifiers.add(nullifier);
+
+      log("VOLE / QuickSilver ZK proof generated & signed by 3/3 TEE Attestors.", "ok");
+      log(`On-chain verifier accepted proof bound to ${wallet.slice(0, 8)}...${wallet.slice(-6)}.`, "ok");
+
+      document.getElementById("receiptModeTag").textContent = `${currentMode} • ${templateVersion}`;
+      document.getElementById("rStatement").textContent = data.statement;
+      document.getElementById("rTemplate").textContent = `${templateVersion} (${activeKey})`;
+      document.getElementById("rProofHash").textContent = proofHash;
+      document.getElementById("rWalletBind").textContent = walletBind;
+      document.getElementById("rNullifier").textContent = nullifier;
+
+      document.getElementById("receiptBox").classList.add("visible");
+      document.getElementById("replayBtn").style.display = "inline-block";
+      document.getElementById("copyReceiptBtn").style.display = "inline-block";
+
+      lastReceiptText = `Primus zkTLS Lab Verification\nMode: ${currentMode} (${templateVersion})\nClaim: ${data.statement}\nProof: ${proofHash.slice(0, 18)}...\nNullifier: ${nullifier.slice(0, 18)}...`;
+    }
+
+    function simulateReplayAttack() {
+      log("ATTACK SIMULATION: Attempting to submit same proof from a secondary Sybil wallet...", "warn");
+      log("REVERT: Smart contract rejected transaction — WalletBindingMismatch & NullifierAlreadyConsumed.", "err");
+    }
+
+    function copyReceiptForX() {
+      navigator.clipboard.writeText(lastReceiptText).then(() => {
+        log("Proof receipt copied to clipboard! Ready to paste in your X reply.", "ok");
+      });
+    }
+
+    renderPayload();
+  </script>
+</body>
+</html>
